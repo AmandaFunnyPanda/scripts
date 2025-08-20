@@ -1,0 +1,137 @@
+OOBE Admin Utility
+
+Small PowerShell helper to create (or remove) a local “break-glass” admin during Windows OOBE. Designed for one-liners like:
+
+# from OOBE (Shift+F10) > cmd.exe:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm <YOUR_SHORT_URL> | iex"
+
+
+The script runs in memory, wipes its history, and prints = 1 on success.
+
+What it does (by default)
+
+Creates/refreshes local user admin
+
+Password = hostname ($env:COMPUTERNAME)
+
+Password never expires
+
+Full Name cleared (blank display name)
+
+Adds to Administrators
+
+Writes the password/hostname to C:\hostname
+
+Hides the admin tile from the sign-in screen (you can still log in by typing .\admin)
+
+Self-wipes PowerShell history so your irm … | iex won’t appear with ↑
+
+You can still sign in as .\admin by choosing Other user and typing the credentials manually.
+
+Requirements
+
+Windows PowerShell 5.1+
+
+Run elevated (OOBE Shift+F10 is elevated)
+
+Internet access to your hosted script URL
+
+Modes & Controls
+
+When the script starts it waits for Enter keypresses:
+
+Silent mode: press Enter 3× (no Shift)
+→ Performs the create/refresh flow and prints = 1.
+
+Verbose mode: press Shift+Enter 3×
+→ Shows a menu:
+
+[1] Add admin account (hidden on login screen)
+[2] Remove admin account (with profile)
+
+
+Add: same behavior as silent mode.
+
+Remove: deletes the admin account, its user profile folder, and its ProfileList registry entry, then unhides the account entry.
+
+Any other keys are ignored; counters reset when you switch between Enter vs Shift+Enter.
+
+Typical OOBE usage
+
+At OOBE, press Shift+F10 → Command Prompt.
+
+Run:
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm <YOUR_SHORT_URL> | iex"
+
+
+Choose mode:
+
+Enter, Enter, Enter → silent
+
+Shift+Enter ×3 → verbose menu
+
+Hosting options
+
+GitHub (raw file URL), GitHub Gist (Raw), or any HTTPS static host.
+
+Optional: shorten the URL (e.g., bit.ly) and use it as <YOUR_SHORT_URL>.
+
+Obfuscation & Protection (optional)
+
+You can ship the script as:
+
+1) Obfuscated (gzip+Base64)
+
+Build once:
+
+.\pack.ps1 -In .\run.ps1 -Out .\run.obf.ps1
+
+
+Run:
+
+irm <RAW_OR_SHORT_URL_TO_run.obf.ps1> | iex
+
+2) Password-protected (AES-256/CBC + HMAC-SHA256)
+
+Build once (you’ll be asked to set a password):
+
+.\pack_secure.ps1 -In .\run.ps1 -Out .\run.prot.ps1
+
+
+Run (blank prompt; type password, press Enter):
+
+irm <RAW_OR_SHORT_URL_TO_run.prot.ps1> | iex
+
+
+Wrong/empty password → “Bad password or tampered payload.”
+
+This loader is interactive-only (no env-var bypass).
+
+Use run.prot.ps1 when you need the content protected at rest; otherwise run.ps1 (or run.obf.ps1) is simpler.
+
+Behavior notes
+
+History clean-up: The script disables PSReadLine history saving, clears in-memory history, and deletes the history file for the current user (SYSTEM during OOBE). Your one-liner won’t reappear with ↑.
+
+Hidden tile: The admin tile is hidden via Winlogon\SpecialAccounts\UserList. You can still log in by typing .\admin and the password.
+
+Return code: On success it prints = 1. Verbose mode shows additional progress text.
+
+Troubleshooting
+
+Nothing happens on ↑: That’s intentional (history self-wipe).
+
+Can’t reach URL: Try your raw GitHub URL instead of the short link. Ensure HTTPS and “Raw” view.
+
+“Bad password or tampered payload” (protected build): Password mismatch or altered file. Re-type carefully (blank prompt, no echo), check keyboard layout, or rebuild and re-test.
+
+Access denied on \\127.0.0.1\c$ test: UAC remote restrictions; only relevant if you’re testing network logon. (Not required to use this tool.)
+
+Safety & Ops tips
+
+Keep your hosted URL under your control (ideally your own domain).
+
+If using the protected build, store the password securely and rotate as needed.
+
+After Azure AD/Intune enrollment, consider removing or rotating the local admin according to your policy.
